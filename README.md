@@ -19,8 +19,11 @@ A small terminal typing game in pure Go. Standard library only, no dependencies.
 ## Play
 
 ```bash
-go run .
+go install github.com/avichal-08/termrain@latest
+termrain
 ```
+
+Or from a clone: `go run .`
 
 - Start typing any falling word. The first letter locks onto it.
 - Finish a word to clear it. Every 5 words in a row bumps your multiplier.
