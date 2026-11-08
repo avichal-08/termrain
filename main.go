@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"time"
@@ -14,10 +15,20 @@ func main() {
 		return
 	}
 
-	restore, err := enableRaw()
+	card, err := run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "termrain needs an interactive terminal (Windows Terminal, PowerShell, macOS/Linux terminal):", err)
 		os.Exit(1)
+	}
+	if card != "" {
+		fmt.Println("\n" + card + "\n")
+	}
+}
+
+func run() (string, error) {
+	restore, err := enableRaw()
+	if err != nil {
+		return "", err
 	}
 	out := bufio.NewWriterSize(os.Stdout, 1<<16)
 	fmt.Fprint(out, "\x1b[?1049h\x1b[?25l\x1b[2J")
@@ -53,15 +64,19 @@ func main() {
 		select {
 		case k, ok := <-keys:
 			if !ok {
-				return
+				return g.lastCard, nil
 			}
 			if len(k) > 1 && k[0] == 27 {
 				continue
 			}
 			for _, c := range k {
 				if g.key(c) {
-					return
+					return g.lastCard, nil
 				}
+			}
+			if g.copyReq {
+				g.copyReq = false
+				fmt.Fprintf(out, "\x1b]52;c;%s\a", base64.StdEncoding.EncodeToString([]byte(g.lastCard)))
 			}
 		case now := <-frame.C:
 			if now.Sub(lastSize) > 500*time.Millisecond {

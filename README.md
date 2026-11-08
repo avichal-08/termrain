@@ -32,6 +32,20 @@ Or from a clone: `go run .`
 
 Keys: `Backspace` drops the current word, `Esc` quits, `r` restarts after game over.
 
+Around 600 words: everyday words like animals, food, weather and places, mixed with programming terms.
+
+## Share your run
+
+Press `c` on the game over screen to copy a result card:
+
+```
+☂ termrain · 1840 pts 🏆 new best
+⌨️ 72 wpm  🎯 98%  🔥 x14  ⏱ 1:32
+github.com/avichal-08/termrain
+```
+
+Copying uses OSC 52, which works in Windows Terminal, iTerm2, kitty, WezTerm and most modern terminals. The card is also printed when you quit, so you can always copy it from there.
+
 ## Best score
 
 Your best score, WPM and combo are saved locally:

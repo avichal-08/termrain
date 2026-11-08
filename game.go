@@ -49,10 +49,13 @@ type game struct {
 	elapsed, spawnIn              float64
 	shake, inputErr               int
 
-	over    bool
-	best    Best
-	newBest bool
-	saveErr error
+	over     bool
+	copyReq  bool
+	copied   bool
+	lastCard string
+	best     Best
+	newBest  bool
+	saveErr  error
 }
 
 func newGame(w, h int, best Best) *game {
@@ -69,6 +72,7 @@ func (g *game) reset() {
 	g.elapsed, g.spawnIn = 0, 0.3
 	g.shake, g.inputErr = 0, 0
 	g.over, g.newBest, g.saveErr = false, false, nil
+	g.copyReq, g.copied = false, false
 }
 
 func (g *game) resize(w, h int) {
@@ -197,6 +201,23 @@ func (g *game) gameOver() {
 		g.best = Best{Score: g.score, WPM: g.wpm(), Combo: g.maxCombo, When: time.Now()}
 		g.saveErr = saveBest(g.best)
 	}
+	g.lastCard = g.card()
+}
+
+const repoURL = "github.com/avichal-08/termrain"
+
+func (g *game) survived() string {
+	s := int(g.elapsed)
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
+}
+
+func (g *game) card() string {
+	head := fmt.Sprintf("☂ termrain · %d pts", g.score)
+	if g.newBest {
+		head += " 🏆 new best"
+	}
+	stats := fmt.Sprintf("⌨️ %d wpm  🎯 %d%%  🔥 x%d  ⏱ %s", g.wpm(), g.accuracy(), g.maxCombo, g.survived())
+	return head + "\n" + stats + "\n" + repoURL
 }
 
 func (g *game) key(c byte) bool {
@@ -209,6 +230,10 @@ func (g *game) key(c byte) bool {
 		}
 		if c == 'r' || c == 'R' || c == ' ' || c == '\r' {
 			g.reset()
+		}
+		if c == 'c' || c == 'C' {
+			g.copyReq = true
+			g.copied = true
 		}
 		return false
 	case c == 127 || c == 8:
@@ -389,7 +414,7 @@ func (g *game) renderGameOver(c *canvas) {
 		{"G A M E   O V E R", red},
 		{"", ""},
 		{fmt.Sprintf("score  %d", g.score), white},
-		{fmt.Sprintf("%d wpm · %d%% accuracy · best combo %d", g.wpm(), g.accuracy(), g.maxCombo), dim},
+		{fmt.Sprintf("%d wpm · %d%% accuracy · best combo %d · %s", g.wpm(), g.accuracy(), g.maxCombo, g.survived()), dim},
 		{"", ""},
 	}
 	switch {
@@ -400,7 +425,14 @@ func (g *game) renderGameOver(c *canvas) {
 	default:
 		lines = append(lines, struct{ s, col string }{fmt.Sprintf("personal best  %d  (%d wpm)", g.best.Score, g.best.WPM), magenta})
 	}
-	lines = append(lines, struct{ s, col string }{"", ""}, struct{ s, col string }{"[r] play again    [q] quit", cyan})
+	share := struct{ s, col string }{"[c] copy result to share", green}
+	if g.copied {
+		share = struct{ s, col string }{"✓ copied · paste it anywhere", green}
+	}
+	lines = append(lines,
+		struct{ s, col string }{"", ""},
+		share,
+		struct{ s, col string }{"[r] play again    [q] quit", cyan})
 
 	boxW := 0
 	for _, l := range lines {

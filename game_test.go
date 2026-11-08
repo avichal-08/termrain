@@ -118,3 +118,39 @@ func TestRenderSnapshot(t *testing.T) {
 	}
 	t.Log("\n" + over)
 }
+
+func TestShareCard(t *testing.T) {
+	isolate(t)
+	g := newGame(80, 24, Best{})
+	g.score, g.correct, g.elapsed, g.maxCombo = 1840, 552, 92, 14
+	g.gameOver()
+	card := g.lastCard
+	for _, want := range []string{"1840 pts", "new best", "72 wpm", "x14", "1:32", repoURL} {
+		if !strings.Contains(card, want) {
+			t.Fatalf("card missing %q:\n%s", want, card)
+		}
+	}
+	g.key('c')
+	if !g.copyReq || !strings.Contains(g.render(), "copied") {
+		t.Fatal("c should request a copy and show feedback")
+	}
+	t.Log("\n" + card)
+}
+
+func TestWordListIsClean(t *testing.T) {
+	if len(wordList) < 500 {
+		t.Fatalf("only %d words", len(wordList))
+	}
+	for _, w := range wordList {
+		for i := 0; i < len(w); i++ {
+			if w[i] < 'a' || w[i] > 'z' {
+				t.Fatalf("word %q has a character players can't type", w)
+			}
+		}
+	}
+	for lvl := 1; lvl <= 10; lvl++ {
+		if n := len(wordsWithLen(min(2+lvl/2, 7), 3+lvl*2)); n < 50 {
+			t.Fatalf("level %d pool only %d words", lvl, n)
+		}
+	}
+}
