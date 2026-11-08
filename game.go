@@ -49,17 +49,21 @@ type game struct {
 	elapsed, spawnIn              float64
 	shake, inputErr               int
 
-	over     bool
-	copyReq  bool
-	copied   bool
-	lastCard string
-	best     Best
-	newBest  bool
-	saveErr  error
+	inMenu     bool
+	cmd        string
+	menuOut    []line
+	resetArmed bool
+	over       bool
+	copyReq    bool
+	copied     bool
+	lastCard   string
+	best       Best
+	newBest    bool
+	saveErr    error
 }
 
 func newGame(w, h int, best Best) *game {
-	g := &game{rng: rand.New(rand.NewSource(time.Now().UnixNano())), best: best}
+	g := &game{rng: rand.New(rand.NewSource(time.Now().UnixNano())), best: best, inMenu: true}
 	g.resize(w, h)
 	g.reset()
 	return g
@@ -166,7 +170,7 @@ func (g *game) update(dt float64) {
 	}
 	g.shake = max(0, g.shake-1)
 	g.inputErr = max(0, g.inputErr-1)
-	if g.over {
+	if g.over || g.inMenu {
 		return
 	}
 
@@ -222,11 +226,20 @@ func (g *game) card() string {
 
 func (g *game) key(c byte) bool {
 	switch {
-	case c == 3 || c == 27:
+	case c == 3:
 		return true
+	case g.inMenu:
+		return g.menuKey(c)
+	case c == 27:
+		g.toMenu()
+		return false
 	case g.over:
 		if c == 'q' || c == 'Q' {
 			return true
+		}
+		if c == 'm' || c == 'M' {
+			g.toMenu()
+			return false
 		}
 		if c == 'r' || c == 'R' || c == ' ' || c == '\r' {
 			g.reset()
@@ -356,6 +369,10 @@ func (g *game) render() string {
 		c.center(g.h/2, "make the terminal bigger ☂", yellow)
 		return c.String()
 	}
+	if g.inMenu {
+		g.renderMenu(c)
+		return c.String()
+	}
 
 	hearts := strings.Repeat("♥", max(g.lives, 0)) + strings.Repeat("♡", maxLives-max(g.lives, 0))
 	c.put(1, 0, "☂ TERMRAIN", cyan)
@@ -401,7 +418,7 @@ func (g *game) render() string {
 		c.put(3, g.h-2, g.target.text[:g.typed], green)
 		c.put(3+g.typed, g.h-2, "▏", dim)
 	}
-	c.put(1, g.h-1, "type the falling words · backspace = drop target · esc = quit", dim)
+	c.put(1, g.h-1, "type the falling words · backspace = drop target · esc = menu", dim)
 
 	if g.over {
 		g.renderGameOver(c)
@@ -432,7 +449,7 @@ func (g *game) renderGameOver(c *canvas) {
 	lines = append(lines,
 		struct{ s, col string }{"", ""},
 		share,
-		struct{ s, col string }{"[r] play again    [q] quit", cyan})
+		struct{ s, col string }{"[r] play again   [m] menu   [q] quit", cyan})
 
 	boxW := 0
 	for _, l := range lines {

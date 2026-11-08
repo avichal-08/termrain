@@ -14,6 +14,11 @@ func isolate(t *testing.T) {
 	t.Setenv("HOME", dir)
 }
 
+func playing(g *game) *game {
+	g.inMenu = false
+	return g
+}
+
 func typeWord(g *game, s string) {
 	for i := 0; i < len(s); i++ {
 		g.key(s[i])
@@ -22,7 +27,7 @@ func typeWord(g *game, s string) {
 
 func TestTypingAWordScores(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	g.words = []*word{{text: "defer", x: 5, y: 5, speed: 1}}
 	typeWord(g, "defer")
 	if len(g.words) != 0 || g.score != 50 || g.combo != 1 {
@@ -32,7 +37,7 @@ func TestTypingAWordScores(t *testing.T) {
 
 func TestWrongKeyBreaksCombo(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	g.combo = 4
 	g.words = []*word{{text: "chan", x: 5, y: 5, speed: 1}}
 	typeWord(g, "cx")
@@ -43,7 +48,7 @@ func TestWrongKeyBreaksCombo(t *testing.T) {
 
 func TestTargetsLowestMatchingWord(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	hi := &word{text: "map", x: 5, y: 3}
 	lo := &word{text: "mutex", x: 20, y: 15}
 	g.words = []*word{hi, lo}
@@ -55,7 +60,7 @@ func TestTargetsLowestMatchingWord(t *testing.T) {
 
 func TestLosingSavesBestAndReloads(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	g.score = 1234
 	for g.lives > 0 {
 		g.words = []*word{{text: "bug", x: 5, y: float64(g.ground()), speed: 1}}
@@ -81,13 +86,16 @@ func TestLosingSavesBestAndReloads(t *testing.T) {
 
 func TestRestartAndQuitKeys(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	g.gameOver()
 	if g.key('r'); g.over || g.lives != maxLives {
 		t.Fatal("r should restart")
 	}
+	if g.key(27); !g.inMenu {
+		t.Fatal("esc during a round should go back to the prompt")
+	}
 	if !g.key(27) {
-		t.Fatal("esc should quit")
+		t.Fatal("esc at the prompt should quit")
 	}
 }
 
@@ -95,7 +103,7 @@ var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 
 func TestRenderSnapshot(t *testing.T) {
 	isolate(t)
-	g := newGame(72, 20, Best{Score: 900, WPM: 61})
+	g := playing(newGame(72, 20, Best{Score: 900, WPM: 61}))
 	for i := 0; i < 30*8; i++ {
 		g.update(1.0 / 30)
 	}
@@ -121,7 +129,7 @@ func TestRenderSnapshot(t *testing.T) {
 
 func TestShareCard(t *testing.T) {
 	isolate(t)
-	g := newGame(80, 24, Best{})
+	g := playing(newGame(80, 24, Best{}))
 	g.score, g.correct, g.elapsed, g.maxCombo = 1840, 552, 92, 14
 	g.gameOver()
 	card := g.lastCard
@@ -153,4 +161,73 @@ func TestWordListIsClean(t *testing.T) {
 			t.Fatalf("level %d pool only %d words", lvl, n)
 		}
 	}
+}
+
+func command(g *game, s string) bool {
+	for i := 0; i < len(s); i++ {
+		g.key(s[i])
+	}
+	return g.key('\r')
+}
+
+func TestMenuCommands(t *testing.T) {
+	isolate(t)
+	g := newGame(80, 24, Best{})
+	if !g.inMenu {
+		t.Fatal("should open on the prompt")
+	}
+	command(g, "/sta")
+	if !g.inMenu || !strings.Contains(g.menuOut[1].s, "no runs saved") {
+		t.Fatalf("/stats via prefix: %+v", g.menuOut)
+	}
+	command(g, "/nope")
+	if !strings.Contains(g.menuOut[1].s, "unknown") {
+		t.Fatal("unknown command not reported")
+	}
+	g.key('/')
+	g.key('h')
+	g.key('\t')
+	if g.cmd != "/help" {
+		t.Fatalf("tab completion gave %q", g.cmd)
+	}
+	g.key('\r')
+	if command(g, ""); g.inMenu {
+		t.Fatal("enter on empty prompt should start a round")
+	}
+	g.toMenu()
+	if !command(g, "/quit") {
+		t.Fatal("/quit should quit")
+	}
+}
+
+func TestResetNeedsConfirm(t *testing.T) {
+	isolate(t)
+	saveBest(Best{Score: 500})
+	g := newGame(80, 24, loadBest())
+	command(g, "/reset")
+	if loadBest().Score != 500 {
+		t.Fatal("first /reset must only ask for confirmation")
+	}
+	command(g, "/reset")
+	if loadBest().Score != 0 || g.best.Score != 0 {
+		t.Fatal("second /reset should clear")
+	}
+}
+
+func TestMenuSnapshot(t *testing.T) {
+	isolate(t)
+	g := newGame(76, 24, Best{Score: 1840, WPM: 72, Combo: 14})
+	command(g, "/help")
+	g.key('/')
+	g.key('s')
+	s := g.render()
+	s = regexp.MustCompile(`\x1b\[\d+;1H`).ReplaceAllString(s, "\n")
+	s = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`).ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "'", " ")
+	for _, want := range []string{"termrain", version, "1840 pts", "/stats", "show your personal best"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("menu missing %q", want)
+		}
+	}
+	t.Log(s)
 }

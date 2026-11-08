@@ -9,9 +9,23 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "-reset" || os.Args[1] == "--reset") {
-		os.Remove(bestPath())
-		fmt.Println("best score cleared:", bestPath())
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "-v", "--version", "version":
+			fmt.Println("termrain", version)
+		case "-h", "--help", "help":
+			fmt.Println("termrain " + version + " · type the rain before it lands\n\n" +
+				"usage:\n  termrain            open the prompt (enter to play)\n" +
+				"  termrain --reset    clear your saved best score\n" +
+				"  termrain --version  print the version\n\n" +
+				"best score: " + bestPath())
+		case "-reset", "--reset":
+			os.Remove(bestPath())
+			fmt.Println("best score cleared:", bestPath())
+		default:
+			fmt.Fprintln(os.Stderr, "unknown option "+os.Args[1]+" · try termrain --help")
+			os.Exit(2)
+		}
 		return
 	}
 
